@@ -1,0 +1,1284 @@
+---
+title: 'STAT 542: COVID-19 County Level Data Analysis'
+author: "Spring 2020, by Changyue Hu (ch47), Chenghao Ding(cd7) and Jingbin Cao(jingbin2)"
+date: 'May 15, 2020'
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r setup, include=FALSE}
+  knitr::opts_chunk$set(include = TRUE)  # TRUE for solution; FALSE for questions set
+  knitr::opts_chunk$set(echo = FALSE)
+  knitr::opts_chunk$set(message = FALSE)
+  knitr::opts_chunk$set(warning = FALSE)
+  knitr::opts_chunk$set(fig.height = 6, fig.width = 10, out.width = '50%', fig.align = "center")
+  options(width = 90)
+```
+
+```{css, echo=FALSE}
+.solution {
+background-color: #CCDDFF;
+}
+```
+
+## Project Description
+
+This project uses county level data about demographics and health-related information to predict one week deaths from April 23rd to April 30th. We consider some predictor variables, such as the polulation, age distribution, gender distribution,  per capita share of medical resources and health conditions. At first, to give a simple understanding, we perform the covid-19 growing pattern clustering by k-means method, demographics clustering by spectral method and health-related information clustering by agglomerative hierarchical clustering method. We use logistic regression and suport vector machine to predict whether death per 100,000 population in the county is larger than 1. Then, four regression methods, elastic penalized regression, random forest regression, GAM regression and XGboost method, are used to to predict one week deaths, based on the previous days' amount of deaths, the cases a week ago and the characteristics of demogrphics and health-related information. 
+
+According to the clusters, we find cases and health resource are highly affected by the economic situation of a county. Comparing to them, deaths and demographics do not show any obvious regional characteristics and scatter throughout the country. The classification performs well and can give identify most counties with high death rate.
+
+According to the coefficients of the regression model, we conclude that the the population and population density makes their death toll rise even faster in the county. People over 85 with heart disease are more vulnerable to this virus. Comparing to male, female are more vulnerable. It is helpful for reducing the deaths to provide adequate medical resource, such as a hospital. However, because of the population base, age density and gender density are related to social situation in this area, we think the analysis of vulnerable poeple are affected. 
+
+## Litureture review 
+
+In "Curating a COVID-19Curating a COVID-19 data repository and forecasting county-level death counts in the United States" (2020), the authors (Altieri1 et al.) collate a large database about COVID-19 information and develop several models to forecast short-term deaths at the county-level in the United States resulting from COVID-19.
+
+The database they build includes county level information (such as demographic information and health resource) and hospital level data. When building prediction models, several predictor variables are considered, including the amount of deaths and cases in previous days in the current county and in neighboring counties, a set of demographic and healthcare-related features and so on. For the individual county-speciﬁc prediction models, the exponential predictors (Poisson generalized linear model) and linear predictors are both developed. They combine their forecasts using ensembling techniques and get the Combined Linear and Exponential Predictors (CLEP). They think the prediction of the expected number of deaths over the next week will be helpful for county-speciﬁc decision-making and give a sense of the future .
+
+## Data Preprocessing
+
+```{r}
+library(readr)
+library(tidyr)
+library(kknn)
+
+# load the data
+county_data <- read_csv("county_data_apr22.csv")
+```
+
+### Missing Value Treatment
+The data set has nearly 276 features, however, there are some features of county containing a lot of missing values. Below we present the variables which have missing values.
+```{r}
+sort(colSums(is.na(county_data))[colSums(is.na(county_data))>0],decreasing = T)[1:8] 
+# there are 30 features with missing values
+```
+
+We first remove the features which contains a large fraction of missing values. In detail, we dropped 25 features which have more than 50 missing values.
+```{r}
+# remove 25 feature that contains a lot of missing values
+col_rm = colnames(county_data)[colSums(is.na(county_data)) > 0][c(1:3,6,10:30)]
+df =  county_data[, ! names(county_data) %in% col_rm, drop = F]
+```
+
+In the process of dealing with missing value problem, we notice that there are 5 features that only contains a few missing values (no more than 21): `MedicareEnrollment,AgedTot2017`, `StrokeMortality`, `#EligibleforMedicare2018`, `HeartDiseaseMortality` and `DiabetesPercentage`. We think these county level features are important health resource and risk factors and might be helpful for our analysis and prediction modeling. Given that the number of missing values in these variables is limited, we compensate for missing values of these 5 variables.
+
+Assume that the counties which have the cloest population centers would enjoy similar demograchic and healthe related features. We implement the data imputation procedure for these 5 variables by replacing the missing values with 1-NN estimate, determining the neighbor of a county based on `POP_LATITUDE` and `POP_LONGITUDE`.
+
+```{r}
+# data imputation
+# Stroke Mortality
+na1= which(is.na(df$StrokeMortality))
+for(i in na1){
+  df$StrokeMortality[i]=kknn(StrokeMortality~ POP_LATITUDE+POP_LONGITUDE, 
+                                  train = df[-na1,], test = df[i, ],
+                                  k = 1, distance = 2, 
+                                  kernel = "rectangular")$fitted.value
+}
+
+# DiabetesPercentage
+na2= which(is.na(df$DiabetesPercentage))
+for(i in na2){
+  df$DiabetesPercentage[i]=kknn(DiabetesPercentage~ POP_LATITUDE+POP_LONGITUDE, 
+                                  train = df[-na2,], test = df[i, ],
+                                  k = 1, distance = 2, 
+                                  kernel = "rectangular")$fitted.value
+}
+
+# HeartDiseaseMortality
+na3= which(is.na(df$HeartDiseaseMortality))
+for(i in na3){
+  df$HeartDiseaseMortality[i]=kknn(HeartDiseaseMortality~ POP_LATITUDE+POP_LONGITUDE, 
+                                     train = df[-na3,], test = df[i, ],
+                                     k = 1, distance = 2, 
+                                     kernel = "rectangular")$fitted.value
+}
+
+# MedicareEnrollment,AgedTot2017
+na4= which(is.na(df$`MedicareEnrollment,AgedTot2017`))
+
+for(i in na4){
+  df$`MedicareEnrollment,AgedTot2017`[i]=kknn(`MedicareEnrollment,AgedTot2017`~ POP_LATITUDE+POP_LONGITUDE, 
+                                        train = df[-na4,], test = df[i, ],
+                                        k = 1, distance = 2, 
+                                        kernel = "rectangular")$fitted.value
+}
+
+# EligibleforMedicare2018
+na5= which(is.na(df$`#EligibleforMedicare2018`))
+for(i in na5){
+  df$`#EligibleforMedicare2018`[i]=kknn(`#EligibleforMedicare2018`~ POP_LATITUDE+POP_LONGITUDE, 
+                                        train = df[-na5,], test = df[i, ],
+                                        k = 1, distance = 2, 
+                                        kernel = "rectangular")$fitted.value
+}
+```
+
+### Variable transformation
+
+* Age division
+
+According to the age division method  in CDC COVID-19 weekly report, we group the county level population by 5 age groups, `<5yrs`,`5-19yrs`,`20-64yrs`,`65-84yrs`,`>85yrs` and then divide them by the total population of the county to get the estimated propotions of different age group for each county. In detail, we create five new variables `%pop<5`, `%pop5-19`, `%pop20-64`, `%pop65-84` and `%pop>85`, which are approximate percentage of total population for these five age groups.
+```{r}
+# distribution of population by 5 age groups
+df$`%pop<5` <- rowSums(df[,32:33])/df$CensusPopulation2010
+df$`%pop5-19` <- rowSums(df[,34:39])/df$CensusPopulation2010
+df$`%pop20-64` <- rowSums(df[,40:53])/df$CensusPopulation2010
+df$`%pop65-84`<-rowSums(df[,54:57])/df$CensusPopulation2010
+df$`%pop>85` <- rowSums(df[,58:59])/df$CensusPopulation2010
+```
+
+* Per capita level health resource
+
+Considering that the health resource of a county, like `#Hospitals` and `#ICU_beds`, is correlated with the total population of the county, we transform health resource information on per capita level to get a more accurate acknowledge of a county's medical condition.
+```{r}
+# transform health resource information on per capita level
+df$`MedicareEnrollment,AgedTot2017`= df$`MedicareEnrollment,AgedTot2017`/(df$PopTotalFemale2017+df$PopTotalMale2017)
+df$`#EligibleforMedicare2018` = df$`#EligibleforMedicare2018`/df$PopulationEstimate2018
+df[,27:31]=df[,27:31]/(df$PopTotalFemale2017+df$PopTotalMale2017)
+df[,29:31]=df[,29:31]*10^5
+df[,27:28]=df[27:28]*10^5
+
+# remove before-transformation variables 
+df<-df[,-c(32:59)]
+df<-df[,-c(13:14)]
+df$CensusPopulation2010=NULL
+```
+
+```{r}
+df = cbind(X1 = as.numeric(rownames(df)),df)
+colnames(df)[2] = "X1_1"
+```
+
+## Clustering
+
+In order to understand the data, especially the underlying COVID19 counts pattern at the county level and its association with demographics and health-related information of a county, we will perform three clustering in this section. In detail, we will perform the covid-19 growing pattern clustering by k-means method, demographics clustering by spectral method and health-related information clustering by agglomerative hierarchical clustering method.
+
+### Case and Death Growing Pattern (Kmeans Cluster)
+
+To find the underlying pattern (at the county level) in terms of how the COVID19 counts are growing and the death counts are growing, we use two variables ($r_k$ and $r'_k$) as explanatory variables to cluster the counties.
+
+For both cases and deaths, we calculate the variables as following.
+
+Set growth rate $r_{ki}$ for county $k$ in day $i$ is 
+$$r_{k,i}=\frac{\sharp \text{ of case}_{k,i+1}-\sharp \text{ of case}_{k,i}}{\sharp \text{ of case}_{k,i}}$$
+The average growth rate $r_k$ for county $k$ is defind as:
+$$r_k=\frac{1}{\sharp \text{ of days}_k -1}\sum_{i=1}^{\sharp \text{ of days}_k -1}r_{k,i}$$
+Which is similar to the average of derivatives of case county.
+
+$r'_k$ is similar to the average of the second derivatives of case county:
+$$r'_k = \frac{1}{\sharp \text{ of days}_k -2}\sum_{i=1}^{\sharp \text{ of days}_k -2}\frac{r_{k,i+1}-r_{k,i}}{r_{k,i}}$$
+
+```{r}
+set.seed(100)
+data <- county_data
+case <- as.matrix(data[,89:180])
+death <- as.matrix(data[,181:272])
+n <- nrow(data)
+#for cases
+dailyR <- (case[,-1]-case[,-92])/case[,-92]
+ave.dailyR <- c()
+for(i in 1:n){
+  ave.dailyR[i] <- mean(dailyR[i,][is.finite(dailyR[i,])])
+}
+dailyR2 <- (dailyR[,-1]-dailyR[,-91])/dailyR[,-91]
+ave2.dailyR  <- c()
+for(i in 1:n){
+  ave2.dailyR[i] <- mean(dailyR2[i,][is.finite(dailyR2[i,])])
+}
+#for death
+dailyD <- (death[,-1]-death[,-92])/death[,-92]
+ave.dailyD <- c()
+for(i in 1:n){
+  ave.dailyD[i] <- mean(dailyD[i,][is.finite(dailyD[i,])])
+}
+dailyD2 <- (dailyD[,-1]-dailyD[,-91])/dailyD[,-91]
+ave2.dailyD  <- c()
+for(i in 1:n){
+  ave2.dailyD[i] <- mean(dailyD2[i,][is.finite(dailyD2[i,])])
+}
+
+caseR <-cbind(ave.dailyR,ave2.dailyR)
+caseR[which(is.na(caseR))] <- 0
+deathR <- cbind(ave.dailyD,ave2.dailyD)
+deathR[which(is.na(deathR))] <- 0
+```
+
+**Cases:**
+```{r,fig.width=6, fig.height=4}
+#kmeans
+#for cases
+resultc <- list()
+indis <-c()
+for(k in 2:8){
+  resultc[[(k-1)]] <- kmeans(caseR, centers = k, nstart = 20)
+  indis[(k-1)] <-resultc[[(k-1)]]$tot.withinss
+}
+library(ggplot2)
+library(plyr)
+library(lattice)
+library(Rmisc)
+library(scales)
+ggdata2 <- data.frame(x=c(2:8),y=indis)
+ggplot(ggdata2,aes(x=x,y=y))+geom_line(colour="deepskyblue",lwd=1)+geom_point(pch=19,colour="darkorange")+geom_vline(xintercept = 3,colour="blue",lty=2)+labs(title = "within distance")+theme(plot.title = element_text(hjust = 0.5))
+```
+In the above figure, we see the with-in distance has a obvious inflexion when the number of cluster is $3$. Therefore, we find 3 clusters.
+
+```{r}
+countyc1 <- which(resultc[[2]]$cluster==1)[1]
+countyc2 <- which(resultc[[2]]$cluster==2)[1]
+countyc3 <- which(resultc[[2]]$cluster==3)[1]
+nc1 <- sum(case[countyc1,]>0)
+nc2 <- sum(case[countyc2,]>0)
+nc3 <- sum(case[countyc3,]>0)
+ncm <- max(nc1,nc2,nc3)
+
+ggdata1 <- data.frame(x=c((ncm-nc1+1):ncm,(ncm-nc2+1):ncm,(ncm-nc3+1):ncm),case=c(case[countyc1,(case[countyc1,]>0)],case[countyc2,(case[countyc2,]>0)],case[countyc3,(case[countyc3,]>0)]),type=c(rep("type1",nc1),rep("type2",nc2),rep("type3",nc3)))
+
+p1 <- ggplot(ggdata1)+geom_line(aes(x=factor(x),y=case,group=type,colour=type),size=1)+scale_x_discrete(breaks=seq(1,ncm,10))+labs(title="Cases",x="days",y="cases")+
+  theme(plot.title = element_text(hjust = 0.5))
+p2 <- ggplot()+geom_line(aes(x=ggdata1$x[1:nc1],y=ggdata1$case[1:nc1]),colour="#F8766D",size=1)+labs(title="Cluster 1",x="days",y="cases")+
+  theme(plot.title = element_text(hjust = 0.5))
+p3 <- ggplot()+geom_line(aes(x=ggdata1$x[(nc1+1):(nc1+nc2)],y=ggdata1$case[(nc1+1):(nc1+nc2)]),colour="619CFF",size=1)+labs(title="Cluster 2",x="days",y="cases")+
+  theme(plot.title = element_text(hjust = 0.5))
+p4 <- ggplot()+geom_line(aes(x=ggdata1$x[(nc1+nc2+1):(nc1+nc2+nc3)],y=ggdata1$case[(nc1+nc2+1):(nc1+nc2+nc3)]),colour="#6495ED",size=1)+labs(title="Cluster 3",x="days",y="cases")+
+  theme(plot.title = element_text(hjust = 0.5))
+multiplot(p1,p2,p3,p4,layout=matrix(c(1,2,3,4), nrow=2, byrow=TRUE))
+```
+**Death:**
+```{r,fig.width=6, fig.height=4}
+#kmeans
+#for deaths
+resultd <- list()
+indis.d <-c()
+for(k in 2:8){
+  resultd[[(k-1)]] <- kmeans(deathR, centers = k, nstart = 20)
+  indis.d[(k-1)] <-resultd[[(k-1)]]$tot.withinss
+}
+
+ggdata3 <- data.frame(x=c(2:8),y=indis.d)
+ggplot(ggdata3,aes(x=x,y=y))+geom_line(colour="deepskyblue",lwd=1)+geom_point(pch=19,colour="darkorange")+geom_vline(xintercept = 3,colour="blue",lty=2)+labs(title = "within distance")+theme(plot.title = element_text(hjust = 0.5))
+```
+Similarly, we choose 3 clusters:
+```{r}
+countyd1 <- which(resultd[[2]]$cluster==1)[2]
+countyd2 <- which(resultd[[2]]$cluster==2)[1]
+countyd3 <- which(resultd[[2]]$cluster==3)[2]
+par(mfrow=c(2,2))
+plot(death[countyd1,(death[countyd1,]>0)],type = "l")
+plot(death[countyd2,(death[countyd2,]>0)],type = "l")
+plot(death[countyd3,(death[countyd3,]>0)],type = "l")
+nd1 <- sum(death[countyd1,]>0)
+nd2 <- sum(death[countyd2,]>0)
+nd3 <- sum(death[countyd3,]>0)
+ndm <- max(nd1,nd2,nd3)
+
+
+ggdata4 <- data.frame(x=c((ndm-nd1+1):ndm,(ndm-nd2+1):ndm,(ndm-nd3+1):ndm),death=c(death[countyd1,(death[countyd1,]>0)],death[countyd2,(death[countyd2,]>0)],death[countyd3,(death[countyd3,]>0)]),type=c(rep("type1",nd1),rep("type2",nd2),rep("type3",nd3)))
+
+p5 <- ggplot(ggdata4)+geom_line(aes(x=factor(x),y=death,group=type,colour=type),size=1)+scale_x_discrete(breaks=seq(1,ndm,10))+labs(title="Deaths",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p6 <- ggplot()+geom_line(aes(x=ggdata4$x[1:nd1],y=ggdata4$death[1:nd1]),colour="#F8766D",size=1)+labs(title="Cluster 1",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p7 <- ggplot()+geom_line(aes(x=ggdata4$x[(nd1+1):(nd1+nd2)],y=ggdata4$death[(nd1+1):(nd1+nd2)]),colour="619CFF",size=1)+labs(title="Cluster 2",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p8 <- ggplot()+geom_line(aes(x=ggdata4$x[(nd1+nd2+1):(nd1+nd2+nd3)],y=ggdata4$death[(nd1+nd2+1):(nd1+nd2+nd3)]),colour="#6495ED",size=1)+labs(title="Cluster 3",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+multiplot(p5,p6,p7,p8,layout=matrix(c(1,2,3,4), nrow=2, byrow=TRUE))
+```
+
+
+```{r}
+data.plot <- list()
+data.plot$POP_LATITUDE <- data$POP_LATITUDE
+data.plot$POP_LONGITUDE <- data$POP_LONGITUDE
+data.plot$d_cluster <- resultd[[2]]$cluster
+data.plot$c_cluster <- resultc[[2]]$cluster
+ggplot(data=as.data.frame(data.plot),aes(x=POP_LONGITUDE,y=POP_LATITUDE))+geom_point(aes(colour=as.factor(d_cluster)))
+```
+In the above figure, it shows the clusters for cases growth pattern in U.S. Countyies in the First cluster are shown in red, counties in the second cluster are shown in green and counties in the third cluster are shown in blue. It shows that most counties have different pattern with the counties in the southwest and eastnorth. This result is consistent with what we now know. The counties in New York, Log Angeles areas and Florida grow fastest, the counties near them also grow faster than others.
+```{r}
+ggplot(data=as.data.frame(data.plot),aes(x=POP_LONGITUDE,y=POP_LATITUDE))+geom_point(aes(colour=as.factor(c_cluster)))
+```
+This Figure shows the clusters for deaths growth pattern in U.S. It is very different from the previous figure, which means the deaths pattern are not similar to cases. The cases growth fast is not necessary to have higher deaths increasing rate. It may casued by the demographics and medical condition. We will try to explore it in the following sections.
+
+### Demographical Information
+
+We use the near 5 neighbors as the adjacency matrix. We choose to have 3 clusters to compare with pattern.
+```{r}
+library(FNN)
+set.seed(100)
+demog <- df
+ddemog1 <- demog[,c(13,14,16:19,222:226)]
+ddemog <- apply(ddemog1,2,scale)
+n <- nrow(ddemog)
+nn = get.knn(ddemog, k=5)
+  W = matrix(0, n, n)
+  for (i in 1:n)
+    W[i, nn$nn.index[i, ]] = 1
+  
+  # W is not necessary symmetric
+  W = pmax(W, t(W))
+  
+  d = colSums(W)
+  
+  # the laplacian matrix
+  L = diag(n) - diag(1/sqrt(d)) %*% W %*% diag(1/sqrt(d))
+  
+  # eigen decomposition
+  f = eigen(L, symmetric = TRUE)
+  
+  # plot the eigen values 
+  # we need the smallest ones
+  s.cl = kmeans(f$vectors[, 3139:3141], centers = 3, nstart = 100)
+
+```
+
+For each cluster, we show the center of population and the proportion of people over 65.
+```{r}
+library(ggplot2)
+pop <-c()
+pro65 <- c()
+sig <-list()
+for(i in 1:3){
+  row.n <- which(s.cl$cluster==i)
+  popu<- ddemog[row.n,4]
+  prop <- ddemog[row.n,10]+ddemog[row.n,11]
+  pop[i]<- mean(popu)
+  pro65[i]<- mean(prop)
+  xi <- cbind(popu-pop[i],prop-pro65[i])
+  sig[[i]]<- t(xi)%*%xi
+}
+library(mixtools)
+pop_pro <- data.frame(pop=pop,pro=pro65)
+ggplot(pop_pro)+geom_point(aes(x=pop,y=pro),pch=19,colour=c("#F8766D","619CFF","#6495ED"))
+#plot(pop,pro65,pch=19,col=c("red","green","deepskyblue"))
+  
+#  addellipse <- function(mu, Sigma, ...)
+#  {
+#    ellipse(mu, Sigma, alpha = .05, lwd = 1, ...)
+#    ellipse(mu, Sigma, alpha = .25, lwd = 2, ...)
+#  }
+    
+#  addellipse(c(pop[1],pro65[1]), sig[[1]], col = "red")
+#  addellipse(c(pop[2],pro65[2]), sig[[2]], col = "green")
+#  addellipse(c(pop[3],pro65[3]), sig[[3]], col = "deepskyblue")
+```
+The three clusters have obvious different characters in demograhics. 
+
+The cluster result for demographics are shown in map.
+```{r}
+table(s.cl$cluster)
+ddemog2 <- demog[,8:9]
+ddemog2$cluster <- s.cl$cluster
+ggplot(data=ddemog2,aes(x=ddemog2[,2],y= ddemog2[,1]))+geom_point(aes(colour=as.factor(cluster)))
+```
+In the figure, we can find that the some economically developed areas have a similar population characteristic (they are in the same cluster). Also, the counties in each cluster are not concentrated, but scattered throughout the country, which may contribute to the prediction of deaths increase. 
+
+
+### Health-related Informaton
+
+To explore the difference of health-related condition for different counties, we perform hierarchical clustering based on the health-related information. We want to see if there are any underlying clusters and if the result is similar to the COVID-19 pattern clusters.
+
+Among the hierarchical clustering methods, we choose agglomerative HC. Agglomerative clustering is also known as AGNES (Agglomerative Nesting). It works in a bottom-up manner. That is, each object is initially considered as a single-element cluster (leaf). At each step of the algorithm, the two clusters that are the most similar are combined into a new bigger cluster (nodes). 
+
+We perform agglomerative HC with `agnes`. With the `agnes` function we can also get the agglomerative coefficient (ac), which measures the amount of clustering structure found (values closer to 1 suggest strong clustering structure). This allows us to find certain hierarchical clustering methods that can identify stronger clustering structures. Here we see that Ward’s method identifies the strongest clustering structure of the four methods assessed.
+
+```{r}
+library(cluster)    # clustering algorithms
+```
+
+```{r}
+# extract health related data
+health <- df[,20:29]
+
+# number of county in total
+n = nrow(health)
+
+# scale for Hierarchical clustering
+health2 <- scale(health)
+
+# Compute with agnes using average method
+hc1 <- agnes(health2, method = "average")
+
+# Compute with agnes using single method
+hc2 <- agnes(health2, method = "single")
+
+# Compute with agnes using complete method
+hc3 <- agnes(health2, method = "complete")
+
+# Compute with agnes using ward method
+hc4 <- agnes(health2, method = "ward")
+
+# compare agglomerative coefficient 
+compareac = c(hc1$ac, hc2$ac, hc3$ac, hc4$ac)
+```
+
+Based on he result of agglomerative HC with Ward’s method, we group counties into 3 clusters, which is consistent with the number of clusters in COID-19 patterns. The table below presents the number of counties in each cluster.
+```{r}
+# Cut tree into 3 groups
+hc_cluster <- cutree(hc4, k = 3)
+
+# Number of members in each cluster
+table(hc_cluster)
+```
+
+To visualized our clustering result, we plot the three clusters of counties on a demographical map like before.
+```{r}
+data.plot$hc_cluster <- hc_cluster
+ggplot(data=as.data.frame(data.plot),aes(x=POP_LONGITUDE,y=POP_LATITUDE))+geom_point(aes(colour=as.factor(hc_cluster)))
+```
+
+For the plot above we see the counties in the first cluster are mainly distributed in states like Washington, California, New York and Florida, which are all states with good economic conditions. The clustering result based on health-related information seems related to economic condition of the counties. comparing this result with the COVID-19 pattern clustering result, we see that the relationship between a county's medical resource level and its covid-19 situation could not be linear. The potential association between number of covid-19 cases and the healthe resource would be much more complex. Higher levels of medical resources and care are usually found in large cities. But on the other hand, the high population density and movement of people in large cities often accelerate the spread of the virus, making large cities, such as New York, the epicenter of COVID-19.
+
+## Classification
+
+In this section, two methods such as Support-vector machine (SVM) and Logistic regression are applied to this binary classification problem. First of all, define the class variable-Death per 100,000 population > 1, and label the repsonse variable in training data accordingly. Considering this is a complicated case with a non-seperable boundary, therefore, a nonlinear SVM with a radial kernel is used to fit the train data. Also, hyperparameters such as cost of constraints violation and gamma are tuned using tune.svm function and searched by grid. Finally, the best cost and gamma parameter are found. The searching grids of cost and gamma are [0.1,1,10]. Before classification, the train data are scaled.
+
+```{r}
+library(tidyverse)
+library(e1071)
+library(caret) #select tuning parameters
+
+# first method using SVM
+# transform cov19 data to binary problem, and scale data
+cov19 = df
+cov19 <- transform(cov19, deathRatio =  tot_deaths / (PopulationEstimate2018/100000))
+cov19[,ncol(cov19)] <- ifelse(cov19[,ncol(cov19)] > "1", TRUE, FALSE)
+
+# target = as.factor(cov19$deathRatio == "TRUE")
+target = cov19$deathRatio
+# subsetcov19 <- cov19[, (colnames(cov19) %in% c("DiabetesPercentage", "HeartDiseaseMortality", "StrokeMortality", "Smokers_Percentage", "RespMortalityRate2014","%pop<5","%pop5-19","%pop20-64","%pop65-84","%pop>85"))]
+
+subcov19 = cov19 %>% select(PopulationDensityperSqMile2010, MedianAge2010, DiabetesPercentage, HeartDiseaseMortality, StrokeMortality, Smokers_Percentage, RespMortalityRate2014, X.Hospitals, X.ICU_beds, X.pop.5, X.pop5.19, X.pop20.64, X.pop65.84, X.pop.85)
+
+sub2cov19 = scale(subcov19)
+
+# radial kernel
+svm.fit3 = svm(factor(target) ~ ., data =  sub2cov19, scale = FALSE, kernel = "radial", cost = 5)
+
+# test with train data
+pred3 = predict(svm.fit3, sub2cov19)
+
+# Check accuracy:
+table(pred3, target)
+acc3 = sum(diag(table(pred3, target)))/sum(table(pred3, target))
+
+#tune model
+tune_out <-
+    tune.svm(x = sub2cov19, y = target,
+             type = "C-classification",
+             kernel = "radial", cost = 10^(-1:2),
+             gamma = c(0.1, 1, 10))
+
+#list optimal values
+
+```
+Thus, the best tunning Cost=`r tune_out$best.parameters$cost`, gamma = `r tune_out$best.parameters$gamma`. The prediction accuracy is `r acc3`.
+
+Second method is Penalized logistic regression. A ten-fold cross validation is applied. Penalized linear regression (with lasso penalty) is implemented.
+
+```{r}
+# second method using logistic regression
+
+library(glmnet)
+# Find the best lambda using cross-validation
+ 
+cv.lasso <- cv.glmnet(sub2cov19, target, alpha = 1, family = "binomial",nfolds = 10)
+
+# Fit the final model on the training data
+model <- glmnet(sub2cov19, target, alpha = 1, family = "binomial",
+                lambda = cv.lasso$lambda.min)
+
+# Display regression coefficients
+coef(model)
+# Make predictions on the training data
+
+probabilities <- model %>% predict(sub2cov19)
+predicted.classes <- ifelse(probabilities > 1, "TRUE", "FALSE")
+# Model accuracy
+acce = mean(predicted.classes == target)
+```
+
+The regression coefficients is shown above too. The population Density has the largest importance in prediction.
+
+The best $\lambda$=`r cv.lasso$lambda.min` and prediction accuracy on training data is `r acce`.
+
+Finally, the classfication results using SVM is compared with the true value is the following US map.
+```{r}
+#generate a US map
+
+data.plot <- list()
+data.plot$POP_LATITUDE <- cov19$POP_LATITUDE
+data.plot$POP_LONGITUDE <- cov19$POP_LONGITUDE
+data.plot$d_cluster <- pred3 # prediction using SVM
+data.plot$c_cluster <- target # real data
+ggplot(data=as.data.frame(data.plot),aes(x=POP_LONGITUDE,y=POP_LATITUDE))+geom_point(aes(colour=as.factor(d_cluster)))
+ggplot(data=as.data.frame(data.plot),aes(x=POP_LONGITUDE,y=POP_LATITUDE))+geom_point(aes(colour=as.factor(c_cluster)))
+```
+It is found that the the main difference between this two plots are the classification in the middle part of USA. It failed to classify the death ratio in central US. However, for the other parts of USA, especially the most serious districts such as New York, Seattle, Texas, and Chicago are correcly classified. This is reasonable consider there are a clear different death growing rate if you compare rural areas or less developed towns with big cities.
+
+
+## Regression: Death Count Prediction
+
+### Model
+
+In this section, we mainly use four method to predict the amount of deaths at county level in the following week (from April 23rd  to April 30th ). 
+
+The relationship between respond variable (amount of deaths in day $t$ in each county) and predictor variables:
+\begin{equation}
+\label{regression}
+\end{equation}
+$$\log{death_t}=\beta_0 + \beta_1 \log{death_{t-1}+ \beta_2 \log{case_{t-7}+ \sum_{k=3}^{21}\beta_k x_k}}$$
+The $x_k$'s are the variables about demographics and health related information at county level introduced in \emph{Section ``Data Processing"}.
+
+### Training data set
+
+We use the data before April 23th to train the model. Because of the ``$\log$" form, we remove the days with deaths$=0$. Also, we think when the deaths is equal to 0, it may have different pattern (stay for a few days). 
+```{r}
+set.seed(100)
+data.p <- df
+n <- nrow(data.p)
+nrow.r <- 85*n
+ncol.r <- ncol(data.p)-92*2-2-12+1+1+1 #minus cases and deaths, add respond,case,death
+regression <- matrix(NA,nrow=nrow.r,ncol=ncol.r)
+# case data.p[,34:125] 
+# death data.p[,126:217]  #92 days - 7 = 85days
+countyinf <- data.p[,c(13:33,220:226)]
+for (i in 1:n){
+  rowdim <- ((i-1)*85+1):(i*85)
+  regression[rowdim,1] <- t(data.p[i,133:217])
+  regression[rowdim,2] <- t(data.p[i,132:216])
+  regression[rowdim,3] <- t(data.p[i,34:118])
+  for (j in 1:85)
+  {
+    rowdd <- rowdim[j]
+    regression[rowdd,4:31] <- as.numeric(countyinf[i,])
+  }
+}
+regression.log <- regression
+regression.log[,1] <- log(regression[,1])
+regression.log[,2] <- log(regression[,2])
+regression.log[,3] <- log(regression[,3])
+colnames(regression) <- c("death_t","death_t-1","case_t-7",colnames(countyinf))
+colnames(regression.log) <- c("log.death_t","log.death_t-1","log.case_t-7",colnames(countyinf))
+
+regression.log <- as.data.frame(regression.log)
+#write.csv(regression.log,file = "regression_inf.csv")
+```
+
+
+```{r}
+null.row <- c()
+for(i in 1:nrow.r){
+  if(is.infinite(regression.log[i,2]))
+    {null.row <-c(null.row,i)}
+}
+
+regression.log <- regression.log[-null.row,]
+null.row2 <- c()
+for(i in 1:nrow(regression.log)){
+  if(is.infinite(regression.log[i,3])|is.infinite(regression.log[i,1]))
+    {null.row2 <-c(null.row2,i)}
+}
+regression.log <- regression.log[-null.row2,]
+#write.csv(regression.log,file = "regression.csv")
+Regression_data <- regression.log
+```
+
+
+###  Elastic Linear Regression and Stepwise Method
+
+We want to use the simple linear regression(OLS) to build the model, but we prefer less variables. Thus, consider Elastic Penalty (with $\alpha = 0.5$) to reduce the dimention at first.
+
+Elastic penalized method:
+
+It is a method combine the $l_1$ penalty and $l_2$ penalty.
+    For a given $\lambda_1$, $\lambda_2$ and loss function$L$:
+    \begin{equation}
+    \label{elastic}
+         L_{Elastic}(\beta) = L(\beta)+\lambda_1 \sum_{k=2}^p |\beta_k| + \lambda_2 \sum_{k=1}^p \beta_k^2,\qquad \hat{\beta}_{Elastic}=\arg \min_{\beta} L_{Elastic}(\beta) 
+    \end{equation}
+where $L(\beta)=\frac{1}{n}\sum_{i=1}^n(y_i-f(\beta))^2$.
+When $\alpha=0.5$, $\lambda_1$ is equal to $\lambda_2$.
+
+After this selection, use stepwise algorithm and AIC to check other variables.
+
+The Akaike information criterion (AIC) is an estimator of out-of-sample prediction error. AIC provides a means for model selection. In estimating the amount of information lost by a model, AIC deals with the trade-off between the goodness of fit of the model and the simplicity of the model. 
+
+\begin{equation}
+    \label{AIC}
+    AIC = 2(-L(\hat{\theta})+(k+1)),
+\end{equation}
+where $L$ is the log-likelihood funtion.
+
+AIC compensate for the number of parameters to get simple model. Stepwise method can choose the model with smallest value of AIC.
+
+Stepwise: use different combinations of variables to build model and select the combination with smallest AIC. 
+
+Completing the above two steps, rebuild simple linear regression model use the selected variables, and we get the results in the following table.
+
+```{r}
+regression.log1 <- Regression_data
+#regression
+library(glmnet)
+regression.log <- regression.log1[,-c(21:26)]
+X <- as.matrix(regression.log[,2:25])
+Y <- as.vector(regression.log[,1])
+
+#elastic
+fit.e <- cv.glmnet(x=X,y=Y,alpha=0.5)
+
+#coefficient
+plot(fit.e)
+remain.e <- which(coef(fit.e, s='lambda.min')!=0)
+linear.e <- lm(log.death_t~.,data=regression.log[,remain.e])
+step.e <- step(linear.e, direction="backward", trace=0,k=2)
+fit.step <- lm(step.e$terms,data=regression.log)
+#summary(fit.step)
+
+MSE.step <- mean(step.e$residuals^2)
+
+library(ggplot2)
+ggplot(data=step.e,aes(x=c(1:23181),y=step.e$residuals))+geom_line()
+
+```
+According to the residuals plot, the model fits better when deaths is large.
+
+
+\begin{table}[!htb] \centering 
+  \caption{} 
+  \label{} 
+  \linespread{1.5}
+\begin{tabular}{@{\extracolsep{5pt}}lcc} 
+\\[-1.8ex]\hline 
+\hline \\[-1.8ex] 
+ & \multicolumn{2}{c}{\textit{Dependent variable:}} \\ 
+\cline{2-3} 
+\\[-1.8ex] 
+& \multicolumn{2}{c}{stepwise} \\ 
+\hline \\[-1.8ex] 
+log.death\_t-1` & 0.967$^{***}$ 
+  & (0.002) \\ 
+ `log.case\_t-7` & 0.022$^{***}$ 
+  & (0.001) \\ 
+
+ FracMale2017 & $-$0.487$^{***}$ 
+  & (0.083) \\ 
+
+ PopulationEstimate65.2017 & 1.719e-07$^{***}$ 
+  & (0.00000) \\ 
+
+ PopulationDensityperSqMile2010 & $1.324e-06$ $^{***}$ 
+  & (0.00000) \\ 
+
+ MedicareEnrollment.AgedTot2017 & $-$0.409$^{***}$  
+  & (0.058) \\ 
+
+ HeartDiseaseMortality & 0.0003$^{***}$  
+  & (0.00004) \\ 
+
+ StrokeMortality & $-$0.001$^{***}$  
+  & (0.0002) \\ 
+  
+ RespMortalityRate2014 & $-5.864e-$04$^{***}$  
+  & (0.0001) \\ 
+ 
+ TotalM.D..s.TotNon.FedandFed2017 & 1.239$e-$05$^{*}$  
+  & (0.00001) \\ 
+  
+ X.HospParticipatinginNetwork2017 & $-$0.003$^{***}$  
+  & (0.001) \\ 
+   
+ X.Hospitals & $-$0.002$^{***}$ 
+  & (0.001) \\ 
+
+ X.pop.5 & $-$0.619$^{***}$  
+  & (0.174) \\ 
+  
+ X.pop.85 & 1.660$^{***}$ 
+  & (0.303) \\ 
+   
+ Constant & 0.365$^{***}$  
+  & (0.052) \\ 
+   
+\hline \\[-1.8ex] 
+Observations & 23,181  &\\ 
+R$^{2}$ & 0.982 &\\ 
+Adjusted R$^{2}$ & 0.982 &\\ 
+Residual Std. Error & 0.189 (df = 23166) &\\ 
+F Statistic & 90,253.070$^{***}$ (df = 14; 23166) &\\ 
+Akaike Inf. Crit. & -11541.82 &\\
+\hline 
+\hline \\[-1.8ex] 
+\textit{Note:}  & \multicolumn{2}{r}{$^{*}$p$<$0.1; $^{**}$p$<$0.05; $^{***}$p$<$0.01} \\ 
+\end{tabular} 
+\end{table} 
+
+
+### Generalized Additive Model 
+
+GAM (Generalized Additive Model) is a powerful and yet simple technique for regression problem. It has substantially more flexibility than GLM because the relationships between independent and dependent variable are not assumed to be linear. In fact, we don’t have to know a priori what type of predictive functions we will eventually need to predict the future death count. From an estimation standpoint, the use of regularized, nonparametric functions avoids the pitfalls of dealing with higher order polynomial terms in linear models. We try to predict $log death_{t-1}$, given $log death_{t-1}$, $log case_{t-7}$ and other explanatory variables by fitting a GAM model. Formula has been given below in the R code chunk.
+
+```{r}
+library(mgcv)
+regression2 <- Regression_data[,-(21:26)]
+# Make syntactically valid names out of character vectors
+colnames(regression2)<-make.names(colnames(regression2))
+
+# formula for GAM
+form.gam = formula("log.death_t~log.death_t.1+log.case_t.7+s(PopulationEstimate2018)+s(FracMale2017)+s(PopulationEstimate65.2017)+s(PopulationDensityperSqMile2010)+s(MedianAge2010)+s(X.EligibleforMedicare2018)+s(MedicareEnrollment.AgedTot2017)+s(DiabetesPercentage)+s(HeartDiseaseMortality)+s(StrokeMortality)+s(Smokers_Percentage)+s(RespMortalityRate2014)+s(X.FTEHospitalTotal2017)+s(TotalM.D..s.TotNon.FedandFed2017)+s(X.HospParticipatinginNetwork2017)+s(X.Hospitals)+s(X.ICU_beds)+s(X.pop.5)+s(X.pop5.19)+s(X.pop20.64)+s(X.pop20.64)+s(X.pop65.84)+s(X.pop.85)")
+
+# fit a GAM model
+fit.gam = gam(form.gam,data = regression2)
+
+MSE.gam = mean((regression2$log.death_t-fit.gam$fitted.values)^2)
+RMSE.gam = sqrt(MSE.gam)
+```
+
+### Boosting
+In this part, a Gradient Boosting method using xgboost is used to predict the next week death toll. 10 fold cross-validation is used to find the best tuning paramter. A linear weak learner is forced to learn the train data. Sum of squared residuals are used as the evaluation metric. A grid of search of hyperparamters in gradient boosting is conducted. The hyperparameters fitted are max_depth of built trees, learning rate. Considering there are three different clusters of counties that we found before. Also, the best tree depth and learning rate are tunned separately in these three models. The root mean square error are evaluated to find the best tuning parameter. Also, the feature importance is plotted.
+
+```{r}
+library(ggplot2) # Data visualization
+library(caret)
+library(xgboost) # basic implementation
+
+regression.log1 <- Regression_data
+regression.log <- regression.log1[,-c(21:26)]
+X <- as.matrix(regression.log[,2:25])
+Y <- as.vector(regression.log[,1])
+
+dtrain <- xgb.DMatrix(data = X , label= Y)
+
+####################
+# Cross-validation
+####################
+
+# Set up cross-validation scheme (10-fold)
+foldsCV <- createFolds(Y, k=10, list=TRUE, returnTrain=FALSE)
+
+# Set xgboost parameters. These are not necessarily the optimal parameters.
+# Further grid tuning is needed. 
+best_param <- list()
+best_seednumber <- 1
+best_rmse <- Inf
+best_rmse_index <- 0
+
+set.seed(100)
+for (iter in 1:50) {
+param <- list(booster = "gblinear"
+              # , objective = "reg:linear"
+              , objective = "reg:squarederror"
+              , subsample = 1
+              , max_depth = sample(6:10, 1)
+              , colsample_bytree = 1
+              , eta = runif(1, .01, .3) # Learning rate, default: 0.3
+              , eval_metric = 'rmse'
+              , base_score = 0.012 #average
+              , min_child_weight = 100)
+
+# Perform xgboost cross-validation
+# Won't fit under kernel limit. Uncomment to run locally.
+  seed.number  <-  sample.int(10000, 1) # set seed for the cv
+  set.seed(seed.number)
+  xgb_cv <- xgb.cv(data=dtrain,
+                 params=param,
+                nrounds=1000,
+                prediction=TRUE,
+                maximize=FALSE,
+                folds=foldsCV,
+                early_stopping_rounds = 30,
+                print_every_n = 5,verbose = 0
+               
+)
+  min_rmse_index  <-  xgb_cv$best_iteration
+  min_rmse <-  xgb_cv$evaluation_log[min_rmse_index]$test_rmse_mean
+
+
+  if (min_rmse < best_rmse) {
+    best_rmse <- min_rmse
+    best_rmse_index <- min_rmse_index
+    best_seednumber <- seed.number
+    best_param <- param
+  }
+}
+
+# The best index (min_rmse_index) is the best "nround" in the model
+nround = best_rmse_index
+# best_param
+
+set.seed(best_seednumber)
+fit.boost <- xgboost(data = dtrain, params = best_param, nround = nround, verbose = F)
+
+# Check error in testing data
+yhat_xg <- predict(fit.boost, X)
+MSE_xgb <- mean((yhat_xg - Y)^2)
+
+feature_names <- names(X)
+# Feature Importance
+importance_matrix <- xgb.importance(feature_names,model=fit.boost)
+xgb.plot.importance(importance_matrix[1:10,])
+```
+The best tunning paramter of learning rate is `r best_param$eta`, and max_depth is `r best_param$max_depth`.
+
+The mean sqaured error of prediction in training dataset will be `r MSE_xgb`.
+The most important factor that are affecting death toll is the proportion of senior people of age older than 85.
+
+The second most important factor that are affecting prediction of death toll is the death number one day before in that county. 
+This is supported by the COV-19 pandemic study of WHO that senior people are more vulnerable to COV-19 disease.
+
+
+### Random Forest
+
+Random Forest constructs a multitude of decision trees and outputs the mean prediction regression of the individual trees. Each tree are built based on a random sample with replacement of the training set. When building a tree, each time it consider one rule based on one dimention and use the rule to split the data into two parts. After several splits, there are many parts each of which has many samples. The mean of the samples in one part are the prediction of a prediction point if the point falls into this part according the rules we build. 
+```{r}
+library(randomForest)
+regression.log1 <- Regression_data
+regression.log <- regression.log1[,-c(21:26)]
+X <- as.matrix(regression.log[,2:25])
+Y <- as.vector(regression.log[,1])
+set.seed(100)
+fit.rf = randomForest(X, Y, ntree = 50)
+MSE.rf <- mean((fit.rf$predicted-Y)^2)
+
+rf.importance <- data.frame(coef=colnames(X),Importance=fit.rf$importance)
+colnames(rf.importance) <- c("coef","Importance")
+ggplot(data=rf.importance)+geom_bar(aes(x=coef,y=Importance),stat='identity')+
+  labs(title="Importance of different variables",x="variable",y="Importance")+
+  coord_flip()+
+  theme(legend.position="top",plot.title = element_text(hjust = 0.5))
+```
+
+In the random forest method, according to the rules we build in each tree, we get the importance for each predictor variable shown in the above figure. According to this, we find the population have important effect.
+
+
+The table below presents the training MSE and RMSE for each method. We see that the Generalized Addictive Model has the smallest MSE among the four methods.
+\begin{table}[!htb] \centering
+\centering
+\begin{tabular}{lllll}
+\hline
+     & Elastic \& Stepwise & GAM     & Random Forest & XGBoost \\ \hline
+MSE  & 0.03554             & 0.03458 & 0.03976       & 0.03542 \\
+RMSE & 0.1885              & 0.1860  & 0.1994        & 0.1882  \\ \hline
+\end{tabular}
+\caption{}
+\label{}
+\end{table}
+
+### Prediction data set
+
+We build prediction matrix for counties shown in deaths clusters and use our four models above to predict the number of death one week from Apr 22.
+
+```{r}
+data.p <- df
+n <- nrow(data.p)
+nrow.r <- 85*n
+ncol.r <- ncol(data.p)-92*2-2-12+1+1+1 #minus cases and deaths, add respond,case,death = 31
+```
+
+
+
+```{r}
+# for county 1
+fit1 <- matrix(NA,85,ncol = 31)
+countyinf <- data.p[,c(13:33,220:226)]
+i <- countyd1
+rowdim <- c(1:85)
+  fit1[rowdim,1] <- t(data.p[i,133:217])
+  fit1[rowdim,2] <- t(data.p[i,132:216])
+  fit1[rowdim,3] <- t(data.p[i,34:118])
+  for (j in 1:85)
+  {
+    rowdd <- rowdim[j]
+    fit1[rowdd,4:31] <- as.numeric(countyinf[i,])
+  }
+
+fit1[,1] <- log(fit1[,1])
+fit1[,2] <- log(fit1[,2])
+fit1[,3] <- log(fit1[,3])
+
+fit1 <- as.data.frame(fit1)
+
+null.row2 <- c()
+for(i in 1:nrow(fit1)){
+  if(is.infinite(fit1[i,3])|is.infinite(fit1[i,1])|is.infinite(fit1[i,2]))
+    {null.row2 <-c(null.row2,i)}
+}
+fit1 <- fit1[-null.row2,]
+fit1 <- fit1[,-c(21:26)]
+colnames(fit1) <- colnames(regression.log)
+  
+# for county 2
+fit2 <- matrix(NA,85,ncol = 31)
+i <- countyd2
+rowdim <- c(1:85)
+  fit2[rowdim,1] <- t(data.p[i,133:217])
+  fit2[rowdim,2] <- t(data.p[i,132:216])
+  fit2[rowdim,3] <- t(data.p[i,34:118])
+  for (j in 1:85)
+  {
+    rowdd <- rowdim[j]
+    fit2[rowdd,4:31] <- as.numeric(countyinf[i,])
+  }
+
+fit2[,1] <- log(fit2[,1])
+fit2[,2] <- log(fit2[,2])
+fit2[,3] <- log(fit2[,3])
+
+fit2 <- as.data.frame(fit2)
+
+null.row2 <- c()
+for(i in 1:nrow(fit2)){
+  if(is.infinite(fit2[i,3])|is.infinite(fit2[i,1])|is.infinite(fit2[i,2]))
+    {null.row2 <-c(null.row2,i)}
+}
+fit2 <- fit2[-null.row2,]
+fit2 <- fit2[,-c(21:26)]  # remove policy and total
+colnames(fit2) <- colnames(regression.log)
+
+# for county 1
+fit3 <- matrix(NA,85,ncol = 31)
+i <- countyd3
+rowdim <- c(1:85)
+  fit3[rowdim,1] <- t(data.p[i,133:217])
+  fit3[rowdim,2] <- t(data.p[i,132:216])
+  fit3[rowdim,3] <- t(data.p[i,34:118])
+  for (j in 1:85)
+  {
+    rowdd <- rowdim[j]
+    fit3[rowdd,4:31] <- as.numeric(countyinf[i,])
+  }
+
+fit3[,1] <- log(fit3[,1])
+fit3[,2] <- log(fit3[,2])
+fit3[,3] <- log(fit3[,3])
+
+fit3 <- as.data.frame(fit3)
+
+null.row2 <- c()
+for(i in 1:nrow(fit3)){
+  if(is.infinite(fit3[i,3])|is.infinite(fit3[i,1])|is.infinite(fit3[i,2]))
+    {null.row2 <-c(null.row2,i)}
+}
+fit3 <- fit3[-null.row2,]
+fit3 <- fit3[,-c(21:26)]
+colnames(fit3) <- colnames(regression.log)
+```
+
+### Prediction Result
+
+#### Prediction: Stepwise model
+```{r}
+# for county 1
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd1,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd1,119:125] # recent cases
+predict1 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict1[,3] <- as.numeric(log(case_t_7))
+colnames(predict1) <- colnames(regression.log)
+for(i in 1:7){
+  predict1[i,4:25] <- as.numeric(countyinf[countyd1,])
+  predict1[i,2] <- death_t_1
+  predict1[i,1]<- predict(  fit.step  ,newdata=as.data.frame(rbind(predict1[i,2:25],predict1[i,2:25])))[1] # add function to predict
+  death_t_1 <- predict1[i,1]
+}
+
+# for county 2
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd2,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd2,119:125] # recent cases
+predict2 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict2[,3] <- as.numeric(log(case_t_7))
+colnames(predict2) <- colnames(regression.log)
+for(i in 1:7){
+  predict2[i,4:25] <- as.numeric(countyinf[countyd2,])
+  predict2[i,2] <- death_t_1
+  predict2[i,1]<- predict(  fit.step  ,newdata=as.data.frame(rbind(predict2[i,2:25],predict2[i,2:25])))[1]
+  death_t_1 <- predict2[i,1]
+}
+
+
+#for county 3
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd3,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd3,119:125] # recent cases
+predict3 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict3[,3] <- as.numeric(log(case_t_7))
+colnames(predict3) <- colnames(regression.log)
+for(i in 1:7){
+  predict3[i,4:25] <- as.numeric(countyinf[countyd3,])
+  predict3[i,2] <- death_t_1
+  predict3[i,1]<- predict(  fit.step  ,newdata=as.data.frame(rbind(predict3[i,2:25],predict3[i,2:25])))[1]
+  death_t_1 <- predict3[i,1]
+}
+```
+
+Plot
+
+```{r, fig.width=12, fig.height=4}
+fitv1 <- exp(predict(fit.step,fit1[,2:25]))
+nd1 <- length(fitv1)
+fitv2 <- exp(predict(fit.step,fit2[,2:25]))
+nd2 <- length(fitv2)
+fitv3 <- exp(predict(fit.step,fit3[,2:25]))
+nd3 <- length(fitv3)
+
+p.st1 <- ggplot()+geom_line(aes(x=c(1:nd1),y=as.numeric(data.p[countyd1,(217-nd1+1):217])),colour="#F8766D",size=1)+geom_line(aes(x=c(1:(nd1+7)),y=c(fitv1,as.numeric(exp(predict1[,1])))))+
+  labs(title="Cluster 1",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.st2 <- ggplot()+geom_line(aes(x=c(1:nd2),y=as.numeric(data.p[countyd2,(217-nd2+1):217])),colour="619CFF",size=1)+geom_line(aes(x=c(1:(nd2+7)),y=c(fitv2,as.numeric(exp(predict2[,1])))))+
+  labs(title="Cluster 2",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.st3  <- ggplot()+geom_line(aes(x=c(1:nd3),y=as.numeric(data.p[countyd3,(217-nd3+1):217])),colour="#6495ED",size=1)+geom_line(aes(x=c(1:(nd3+7)),y=c(fitv3,as.numeric(exp(predict3[,1])))))+
+  labs(title="Cluster 3",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+multiplot(p.st1,p.st2,p.st3,cols=3)
+```
+
+#### Prediction: GAM model
+```{r}
+# for county 1
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd1,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd1,119:125] # recent cases
+predict1 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict1[,3] <- as.numeric(log(case_t_7))
+colnames(predict1) = colnames(regression2)
+
+for(i in 1:7){
+  predict1[i,4:25] <- as.numeric(countyinf[countyd1,])
+  predict1[i,2] <- death_t_1
+  predict1[i,1]<- predict( fit.gam ,newdata=as.data.frame(rbind(predict1[i,2:25],predict1[i,2:25])))[1] # add function to predict
+  death_t_1 <- predict1[i,1]
+}
+
+# for county 2
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd2,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd2,119:125] # recent cases
+predict2 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict2[,3] <- as.numeric(log(case_t_7))
+colnames(predict2) <- colnames(regression2)
+
+for(i in 1:7){
+  predict2[i,4:25] <- as.numeric(countyinf[countyd2,])
+  predict2[i,2] <- death_t_1
+  predict2[i,1]<- predict(  fit.gam  ,newdata=as.data.frame(rbind(predict2[i,2:25],predict2[i,2:25])))[1]
+  death_t_1 <- predict2[i,1]
+}
+
+#for county 3
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd3,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd3,119:125] # recent cases
+predict3 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict3[,3] <- as.numeric(log(case_t_7))
+colnames(predict3) <- colnames(regression2)
+
+for(i in 1:7){
+  predict3[i,4:25] <- as.numeric(countyinf[countyd3,])
+  predict3[i,2] <- death_t_1
+  predict3[i,1]<- predict(  fit.gam ,newdata=as.data.frame(rbind(predict3[i,2:25],predict3[i,2:25])))[1]
+  death_t_1 <- predict3[i,1]
+}
+```
+
+Plot
+```{r,fig.width=12, fig.height=4}
+fit1.gam <- fit1
+colnames(fit1.gam) <- colnames(regression2)
+fit2.gam <- fit2
+colnames(fit2.gam) <- colnames(regression2)
+fit3.gam <- fit3
+colnames(fit3.gam) <- colnames(regression2)
+
+fitv1 <- exp(predict(fit.gam,fit1.gam[,2:25]))
+nd1 <- length(fitv1)
+fitv2 <- exp(predict(fit.gam,fit2.gam[,2:25]))
+nd2 <- length(fitv2)
+fitv3 <- exp(predict(fit.gam,fit3.gam[,2:25]))
+nd3 <- length(fitv3)
+
+p.st1 <- ggplot()+geom_line(aes(x=c(1:nd1),y=as.numeric(data.p[countyd1,(217-nd1+1):217])),colour="#F8766D",size=1)+geom_line(aes(x=c(1:(nd1+7)),y=c(fitv1,as.numeric(exp(predict1[,1])))))+
+  labs(title="Cluster 1",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.st2 <- ggplot()+geom_line(aes(x=c(1:nd2),y=as.numeric(data.p[countyd2,(217-nd2+1):217])),colour="619CFF",size=1)+geom_line(aes(x=c(1:(nd2+7)),y=c(fitv2,as.numeric(exp(predict2[,1])))))+
+  labs(title="Cluster 2",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.st3  <- ggplot()+geom_line(aes(x=c(1:nd3),y=as.numeric(data.p[countyd3,(217-nd3+1):217])),colour="#6495ED",size=1)+geom_line(aes(x=c(1:(nd3+7)),y=c(fitv3,as.numeric(exp(predict3[,1])))))+
+  labs(title="Cluster 3",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+multiplot(p.st1,p.st2,p.st3,cols=3)
+```
+
+#### Prediction: Random Forest model.
+```{r}  
+# for county 1
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd1,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd1,119:125] # recent cases
+predict1 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict1[,3] <- as.numeric(log(case_t_7))
+for(i in 1:7){
+  predict1[i,4:25] <- as.numeric(countyinf[countyd1,])
+  predict1[i,2] <- death_t_1
+  predict1[i,1]<- predict(  fit.rf  ,predict1[i,2:25]) # add function to predict
+  death_t_1 <- predict1[i,1]
+}
+
+# for county 2
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd2,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd2,119:125] # recent cases
+predict2 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict2[,3] <- as.numeric(log(case_t_7))
+for(i in 1:7){
+  predict2[i,4:25] <- as.numeric(countyinf[countyd2,])
+  predict2[i,2] <- death_t_1
+  predict2[i,1]<- predict(  fit.rf  ,predict2[i,2:25])
+  death_t_1 <- predict2[i,1]
+}
+
+
+#for county 3
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd3,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd3,119:125] # recent cases
+predict3 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict3[,3] <- as.numeric(log(case_t_7))
+for(i in 1:7){
+  predict3[i,4:25] <- as.numeric(countyinf[countyd3,])
+  predict3[i,2] <- death_t_1
+  predict3[i,1]<- predict(  fit.rf  ,predict3[i,2:25])
+  death_t_1 <- predict3[i,1]
+}
+
+```
+
+
+Plot
+
+```{r,fig.width=12, fig.height=4}
+fitv1 <- exp(predict(fit.rf,as.matrix(fit1[,2:25])))
+nd1 <- length(fitv1)
+fitv2 <- exp(predict(fit.rf,fit2[,2:25]))
+nd2 <- length(fitv2)
+fitv3 <- exp(predict(fit.rf,fit3[,2:25]))
+nd3 <- length(fitv3)
+
+p.rf1 <- ggplot()+geom_line(aes(x=c(1:nd1),y=as.numeric(data.p[countyd1,(217-nd1+1):217])),colour="#F8766D",size=1)+geom_line(aes(x=c(1:(nd1+7)),y=c(fitv1,as.numeric(exp(predict1[,1])))))+
+  labs(title="Cluster 1",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.rf2 <- ggplot()+geom_line(aes(x=c(1:nd2),y=as.numeric(data.p[countyd2,(217-nd2+1):217])),colour="619CFF",size=1)+geom_line(aes(x=c(1:(nd2+7)),y=c(fitv2,as.numeric(exp(predict2[,1])))))+
+  labs(title="Cluster 2",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.rf3  <- ggplot()+geom_line(aes(x=c(1:nd3),y=as.numeric(data.p[countyd3,(217-nd3+1):217])),colour="#6495ED",size=1)+geom_line(aes(x=c(1:(nd3+7)),y=c(fitv3,as.numeric(exp(predict3[,1])))))+
+  labs(title="Cluster 3",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+multiplot(p.rf1,p.rf2,p.rf3,cols = 3)
+
+```
+
+#### Prediction: Gradient Boosting model
+
+```{r}
+# for county 1
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd1,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd1,119:125] # recent cases
+predict1 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict1[,3] <- as.numeric(log(case_t_7))
+colnames(predict1) <- colnames(regression.log)
+for(i in 1:7){
+  predict1[i,4:25] <- as.numeric(countyinf[countyd1,])
+  predict1[i,2] <- death_t_1
+  predict1[i,1]<- predict(  fit.boost, newdata=as.matrix(rbind(predict1[i,2:25],predict1[i,2:25])))[1] # add function to predict
+  death_t_1 <- predict1[i,1]
+}
+
+# for county 2
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd2,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd2,119:125] # recent cases
+predict2 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict2[,3] <- as.numeric(log(case_t_7))
+colnames(predict2) <- colnames(regression.log)
+for(i in 1:7){
+  predict2[i,4:25] <- as.numeric(countyinf[countyd2,])
+  predict2[i,2] <- death_t_1
+  predict2[i,1]<- predict(  fit.boost, newdata=as.matrix(rbind(predict2[i,2:25],predict2[i,2:25])))[1]
+  death_t_1 <- predict2[i,1]
+}
+
+
+#for county 3
+countyinf <- data.p[,c(13:33,220:226)]
+death_t_1 <- log(countyinf[countyd3,22]) # total deaths
+countyinf <- countyinf[,-c(18:23)] # remove total deaths, cases and policy
+case_t_7 <- data.p[countyd3,119:125] # recent cases
+predict3 <- matrix(NA,nrow=7,ncol=25) #predict matrix
+predict3[,3] <- as.numeric(log(case_t_7))
+colnames(predict3) <- colnames(regression.log)
+for(i in 1:7){
+  predict3[i,4:25] <- as.numeric(countyinf[countyd3,])
+  predict3[i,2] <- death_t_1
+  predict3[i,1]<- predict(  fit.boost ,newdata=as.matrix(rbind(predict3[i,2:25],predict3[i,2:25])))[1]
+  death_t_1 <- predict3[i,1]
+}
+```
+
+Plot
+
+```{r,fig.width=12, fig.height=4}
+library(ggplot2)
+fitv1 <- exp(predict(fit.boost,as.matrix(fit1[,2:25])))
+nd1 <- length(fitv1)
+fitv2 <- exp(predict(fit.boost,as.matrix(fit2[,2:25])))
+nd2 <- length(fitv2)
+fitv3 <- exp(predict(fit.boost,as.matrix(fit3[,2:25])))
+nd3 <- length(fitv3)
+
+p.boost1 <- ggplot()+geom_line(aes(x=c(1:nd1),y=as.numeric(data.p[countyd1,(217-nd1+1):217])),colour="#F8766D",size=1)+geom_line(aes(x=c(1:(nd1+7)),y=c(fitv1,as.numeric(exp(predict1[,1])))))+
+  labs(title="Cluster 1",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.boost2 <- ggplot()+geom_line(aes(x=c(1:nd2),y=as.numeric(data.p[countyd2,(217-nd2+1):217])),colour="619CFF",size=1)+geom_line(aes(x=c(1:(nd2+7)),y=c(fitv2,as.numeric(exp(predict2[,1])))))+
+  labs(title="Cluster 2",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+p.boost3  <- ggplot()+geom_line(aes(x=c(1:nd3),y=as.numeric(data.p[countyd3,(217-nd3+1):217])),colour="#6495ED",size=1)+geom_line(aes(x=c(1:(nd3+7)),y=c(fitv3,as.numeric(exp(predict3[,1])))))+
+  labs(title="Cluster 3",x="days",y="deaths")+
+  theme(plot.title = element_text(hjust = 0.5))
+multiplot(p.boost1,p.boost2,p.boost3,cols=3)
+```
+
+## Conclusion
+
+First of all, by reading WHO latest weekly summary, senior people accompanying with own disease before this pandemic are especially vulerable to COV-19. Therefore, we sub-grouped the population by 5 age range, roughly covering from infants to teenagers, and elderly people. Then, we use Kmeans and spectral cluserting method to cluster the cov-19 data, K-means shows cov-19 case is positive correlated with the regions where economy is more developed, but in terms of death number, it does not show any particular pattern, it is evenly distributed around the country.
+
+For classfication, SVM and Penalized logistic regression are used to study the area where the death number per 100,000 people greater than 1. The model can identify the hot spot area such as east coast New York and Chicago. But the less developed area, like west of US and mid of US did not observe a significant death.
+
+In regression section, four different models are fitted and used to predict one week death number of 4/22 to 4/29. From the importance factor rank figures, it is obvious that the senior people especially for those older than 65 are most vulnerable to the COV-19 disease.Because they might have a lot of disease before this pandemic, such as diabetes, heart disease or stroke. This disease will greatly increase the risk of death once they are infected with the COV-19 virus. Smokers are not sensitive to this COV-19 disease compared to other groups. But this point needs further investigation, since this is a small dataset and the pandemic is also developing, more and more clinical study are going on to check the potential risk factor of affecting COV-19. 
+On one hand, the population density is also positive correlated with death toll. Considering this COV-19 is proved to strongly transmitted between people, so urban cities are expected to have more cases, such as New York, and Chicago. This cities have a lot of enterntainment premises, when people accumulated in this closed atmosphere, the virus are likely to stay in the air longer and people inside it are more likely to get infected.
+
+On the other hand, the proportions of local citizens who have been enrolled in Medicare is also a important player. Since, this represents how wealthy the local citizens are. Usually, the wealthier county have lower risk in death, since they have much better medical resources and cleaner living environment. Also, they have more hospitals and private doctors around their neighbourhoods. 
+Last, the cov-19 cases one week before and death toll just one day before have a large effects in predicting the next day's death number. This is reasonable since this is a time series data, and the death toll are much auto correlated with case number. This point may be further studied by checking the auto correlated function and partial auto correlated function with certain time lags. Approximately, a one week lag from case number and death number are expected, since this cov-19 have one week to two weeks incubation, so that a majority of patients will appear with clear sympotoms and hospitalized into ICU one week after they have been diagnosed.
+
+Finally, we have fitted the 92 days train data from Janurary 22 to April 22 which includes death and case information combined with health-related data and demographics data. All of the four models predict very well in train samples. Besides that, the extraopolation one week after 4/22 is given in previous section. We can find that there are three different patterns of growth rate of cov-19, resepetively exponential growth, sub-exponential growth and linear growth. These findings support our clustering results well.
+
+Finally, a lot of precautions can be done to reduce the mortality and infection case number. Wash your hand frequently and wear a mask to prevent virus aerosols stayed in the air flow into your nose and mouth when you are breathing outside. Also, doing some exercise at home to increase your ability defeat the virus. Do not expose to the outside, and stay at home will also reduce your risk of infection. Cancel the parties if it is not necessary. In the end, hope everyone stay safe during this unusual pandemic.
