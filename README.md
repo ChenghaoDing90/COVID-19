@@ -83,7 +83,7 @@ We want to use the simple linear regression(OLS) to build the model, but we pref
 
 ### Boosting model
 <p align="center">
-<img src="./images/feature_importance.PNG" style="width:450px;height:300px;" />
+<img src="./images/feature_importance.PNG" style="width:1200px;height:300px;" />
 </p>
 
 <p align="center">
@@ -96,10 +96,6 @@ The second most important factor that are affecting prediction of death toll is 
 ### Random Forest
 <p align="center">
 <img src="./images/random_forest.PNG" style="width:600px;height:200px;" />
-</p> 
-
-<p align="center">
-<img src="./images/Capturevgg.PNG" alt="Summary of VGG Model Building" style="width:300px;height:300px;" />
 </p>
 
 ### Conclusion
