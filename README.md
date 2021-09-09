@@ -41,7 +41,7 @@ We select our features that will contribute the most to PC1. Figure shows the co
 ### SVM for Binary Classification
 First one with death rate more than 1/100000 and the other one with death rate less than 1/100000. We perform a non-linear classification using SVM with the radial kernel.
 <p align="center">
-<img src="./images/Captureeq.PNG" style="width:600px;height:50px;" />
+<img src="./images/Captureeq.PNG" style="width:500px;height:100px;" />
 </p>
 where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost. 
 
@@ -53,6 +53,8 @@ The best performance is found when gamma = 0.003125 and cost = 32 and the accura
 </p>
 
 ## Regression:One Week Death Count Prediction
+Four regression methods, elastic penalized regression, random forest regression, GAM regression and XGBoost method, are used to to predict one week deaths, based on the previous days’ amount of deaths, the cases a week ago and the characteristics of demogrphics and health-related information.
+
 The relationship between respond variable (amount of deaths in day t in each county) and predictor variables:
 <p align="center">
 <img src="./images/Captureeqq.PNG" style="width:800px;height:100px;" />
@@ -61,7 +63,7 @@ The xk’s are the variables about demographics and health related information a
 Section “Data Processing".
 
 ### Elastic Linear Regression and Stepwise Method
-We want to use the simple linear regression(OLS) to build the model, but we prefer less variables. Thus, consider Elastic Penalty (with α = 0.5) to reduce the dimention at first.
+We want to use the simple linear regression(OLS) to build the model, but we prefer less variables. Thus, consider Elastic Penalty (with α = 0.5) to reduce the dimention at first. Elastic penalized method is a method combine the l1 penalty and l2 penalty.
 
 <!-- <p align="center">
 <img src="./images/Capturew.PNG" style="width:1200px;height:100px;" />
@@ -94,9 +96,7 @@ The second most important factor that are affecting prediction of death toll is 
 ### Random Forest
 <p align="center">
 <img src="./images/random_forest.PNG" style="width:600px;height:200px;" />
-</p>
-
-We use logistic regression and support vector machine to predict whether death per 100,000 population in the county is larger than 1. Then, four regression methods, elastic penalized regression, random forest regression, GAM regression and XGBoost method, are used to to predict one week deaths, based on the previous days’ amount of deaths, the cases a week ago and the characteristics of demogrphics and health-related information.
+</p> 
 
 <p align="center">
 <img src="./images/Capturevgg.PNG" alt="Summary of VGG Model Building" style="width:300px;height:300px;" />
