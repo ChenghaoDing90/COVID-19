@@ -37,7 +37,9 @@ First one with death rate more than 1/100000 and the other one with death rate l
 <p align="center">
 <img src="./images/Captureeq.PNG" style="width:600px;height:200px;" />
 </p>
-where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost.
+where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost. A 10 fold cross-validation for a grid of gamma and cost is performed to tune the parameter so that we can get the best performance out of the model.
+The best performance is found when gamma = 0.003125 and cost = 32 and the accuracy is about 0.77.
+
 <p align="center">
 <img src="./images/Captureggg.PNG" style="width:450px;height:300px;" />
 </p>
