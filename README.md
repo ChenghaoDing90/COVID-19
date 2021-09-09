@@ -21,7 +21,11 @@ demographics clustering by spectral method and health-related information cluste
 hierarchical clustering method.
 
 <p align="center">
-<img src="./images/Captureffff.PNG" style="width:300px;height:300px;" />
+<img src="./images/Captureffff.PNG" style="width:300px;height:500px;" />
+</p>
+
+<p align="center">
+<img src="./images/cluster3.PNG" style="width:300px;height:300px;" />
 </p>
 
 We find cases and health resource are highly affected by the economic situation of a county. Comparing to them, deaths and demographics do not show any obvious regional characteristics and scatter throughout the country. The classification performs well and can give identify most counties with high death rate.
