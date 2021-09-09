@@ -7,7 +7,13 @@ This project uses county level data about demographics and health-related inform
 At the county level, our data include COVID-19 cases/deaths from USA Facts and NYT, along with demographic information, health resource availability, COVID-19 health risk factors, and social mobility information. While at the hospital level, our data include the location of the hospital, the number of ICU beds, the total number of employees, and the hospital type.
 
 ### Missing Value Treatment
+First, any feature (column) with missing rate more than 5 percent(totally 17 columns) are directly deleted. After deleting, the highest missing rate for feature is 2.316%.
+KNN Imputation
+we use kNN Imputation to fill in the NAs, which uses the values of 10 neighbours and obtains an weighted (by the distance to the case) average of their values to fill in the unknowns. If there is no improvement of NA rate after imputation, then we delete the observations, otherwise, we keep the imputation with KNN.
 
+### Feature engineering
+We extract the most relevant features (demographic and health-related) from raw data so that these features can be used to improve the performance of learning algorithms. To do this, we perform a principal component analysis on demographic and health-related data. We exclude non-relevant data like county name and other string data and prepare two datasets.
+Correlation and scale are both set to be true while performing PCA analysis to avoid unfair comparison due to difference of magnitude of each label.
 
 ## Clustering
 At first, to give a simple understanding, we perform the covid-19 growing pattern clustering by k-means method,
