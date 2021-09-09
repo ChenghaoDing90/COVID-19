@@ -55,7 +55,7 @@ The best performance is found when gamma = 0.003125 and cost = 32 and the accura
 ## Regression:One Week Death Count Prediction
 The relationship between respond variable (amount of deaths in day t in each county) and predictor variables:
 <p align="center">
-<img src="./images/Captureeqq.PNG" style="width:1200px;height:200px;" />
+<img src="./images/Captureeqq.PNG" style="width:1000px;height:100px;" />
 </p>
 The xk’s are the variables about demographics and health related information at county level introduced in
 Section “Data Processing".
