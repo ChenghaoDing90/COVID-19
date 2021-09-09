@@ -34,15 +34,15 @@ We find cases and health resource are highly affected by the economic situation 
 ## Classification
 ### SVM 
 <p align="center">
-<img src="./images/Captureeq.PNG" style="width:450px;height:300px;" />
+<img src="./images/Captureeq.PNG" style="width:600px;height:200px;" />
 </p>
 
 <p align="center">
-<img src="./images/Captureeq.PNG" style="width:450px;height:300px;" />
+<img src="./images/Captureggg.PNG" style="width:450px;height:300px;" />
 </p>
 
 <p align="center">
-<img src="./images/Captureeq.PNG" style="width:450px;height:300px;" />
+<img src="./images/Captureggggg.PNG" style="width:450px;height:300px;" />
 </p>
 
 ## One Week Prediction
