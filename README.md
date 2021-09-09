@@ -41,7 +41,7 @@ We select our features that will contribute the most to PC1. Figure shows the co
 ### SVM for Binary Classification
 First one with death rate more than 1/100000 and the other one with death rate less than 1/100000. We perform a non-linear classification using SVM with the radial kernel.
 <p align="center">
-<img src="./images/Captureeq.PNG" style="width:400px;height:100px;" />
+<img src="./images/Captureeq.PNG" style="width:600px;height:50px;" />
 </p>
 where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost. 
 
