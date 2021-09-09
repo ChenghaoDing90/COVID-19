@@ -17,8 +17,7 @@ county. Comparing to them, deaths and demographics do not show any obvious regio
 scatter throughout the country. The classification performs well and can give identify most counties with
 high death rate.
 
-According to the coefficients of the regression model, we conclude that the the population and population
-density makes their death toll rise even faster in the county. People over 85 with heart disease are more
+According to the coefficients of the regression model, we conclude that the the population and population density makes their death toll rise even faster in the county. People over 85 with heart disease are more
 vulnerable to this virus. Comparing to male, female are more vulnerable. It is helpful for reducing the deaths
 to provide adequate medical resource, such as a hospital. However, because of the population base, age
 density and gender density are related to social situation in this area, we think the analysis of vulnerable
