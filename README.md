@@ -46,17 +46,52 @@ First one with death rate more than 1/100000 and the other one with death rate l
 where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost. A 10 fold cross-validation for a grid of gamma and cost is performed to tune the parameter so that we can get the best performance out of the model.
 The best performance is found when gamma = 0.003125 and cost = 32 and the accuracy is about 0.77.
 
-
-
 <p align="center">
 <img src="./images/Captureggggg.PNG" style="width:450px;height:300px;" />
 </p>
 
-## One Week Prediction
+## Regression:One Week Death Count Prediction
+The relationship between respond variable (amount of deaths in day t in each county) and predictor variables:
+<p align="center">
+<img src="./images/Captureeqq.PNG" style="width:600px;height:200px;" />
+</p>
+The xk’s are the variables about demographics and health related information at county level introduced in
+Section “Data Processing".
+
+### Elastic Linear Regression and Stepwise Method
+We want to use the simple linear regression(OLS) to build the model, but we prefer less variables. Thus, consider Elastic Penalty (with α = 0.5) to reduce the dimention at first.
+<p align="center">
+<img src="./images/Captureeqq.PNG" style="width:600px;height:200px;" />
+</p>
+<p align="center">
+<img src="./images/Captureeqq.PNG" style="width:600px;height:200px;" />
+</p>
+
+<p align="center">
+<img src="./images/stepwise.PNG" style="width:600px;height:200px;" />
+</p>
+
+### Generalized Additive Model
+<p align="center">
+<img src="./images/GAM.PNG" style="width:600px;height:200px;" />
+</p>
+
+### Boosting model
+<p align="center">
+<img src="./images/gradient_boosting.PNG" style="width:600px;height:200px;" />
+</p>
+
+### Random Forest
+<p align="center">
+<img src="./images/random_forest.PNG" style="width:600px;height:200px;" />
+</p>
+
 We use logistic regression and support vector machine to predict whether death per 100,000 population in the county is larger than 1. Then, four regression methods, elastic penalized regression, random forest regression, GAM regression and XGBoost method, are used to to predict one week deaths, based on the previous days’ amount of deaths, the cases a week ago and the characteristics of demogrphics and health-related information.
 
 <p align="center">
 <img src="./images/Capturevgg.PNG" alt="Summary of VGG Model Building" style="width:300px;height:300px;" />
 </p>
+
+
 
 We conclude that the the population and population density makes their death toll rise even faster in the county. People over 85 with heart disease are more vulnerable to this virus. Comparing to male, female are more vulnerable. It is helpful for reducing the deaths to provide adequate medical resource, such as a hospital. However, because of the population base, age density and gender density are related to social situation in this area, we think the analysis of vulnerable poeple are affected.
