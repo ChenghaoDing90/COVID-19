@@ -62,10 +62,10 @@ Section “Data Processing".
 ### Elastic Linear Regression and Stepwise Method
 We want to use the simple linear regression(OLS) to build the model, but we prefer less variables. Thus, consider Elastic Penalty (with α = 0.5) to reduce the dimention at first.
 <p align="center">
-<img src="./images/Captureeqq.PNG" style="width:600px;height:200px;" />
+<img src="./images/Capturew.PNG" style="width:600px;height:200px;" />
 </p>
 <p align="center">
-<img src="./images/Captureeqq.PNG" style="width:600px;height:200px;" />
+<img src="./images/Capturew2.PNG" style="width:600px;height:200px;" />
 </p>
 
 <p align="center">
