@@ -65,7 +65,7 @@ We want to use the simple linear regression(OLS) to build the model, but we pref
 <img src="./images/Capturew.PNG" style="width:1200px;height:100px;" />
 </p>
 <p align="center">
-<img src="./images/Capturew2.PNG" style="width:800px;height:100px;" />
+<img src="./images/Capturew2.PNG" style="width:600px;height:100px;" />
 </p>
 
 <p align="center">
