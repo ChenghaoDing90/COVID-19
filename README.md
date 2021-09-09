@@ -101,7 +101,7 @@ The second most important factor that are affecting prediction of death toll is 
 ### Conclusion
 The table below presents the training MSE and RMSE for each method. We see that the Generalized Addictive Model has the smallest MSE among the four methods.
 <p align="center">
-<img src="./images/Captureff.PNG" style="width:300px;height:300px;" />
+<img src="./images/Captureff.PNG" style="width:1200px;height:300px;" />
 </p>
 
 We conclude that the the population and population density makes their death toll rise even faster in the county. People over 85 with heart disease are more vulnerable to this virus. Comparing to male, female are more vulnerable. It is helpful for reducing the deaths to provide adequate medical resource, such as a hospital. However, because of the population base, age density and gender density are related to social situation in this area, we think the analysis of vulnerable poeple are affected.
