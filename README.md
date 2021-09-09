@@ -11,10 +11,12 @@ death per 100,000 population in the county is larger than 1. Then, four regressi
 regression, random forest regression, GAM regression and XGboost method, are used to to predict one
 week deaths, based on the previous days’ amount of deaths, the cases a week ago and the characteristics of
 demogrphics and health-related information.
+
 According to the clusters, we find cases and health resource are highly affected by the economic situation of a
 county. Comparing to them, deaths and demographics do not show any obvious regional characteristics and
 scatter throughout the country. The classification performs well and can give identify most counties with
 high death rate.
+
 According to the coefficients of the regression model, we conclude that the the population and population
 density makes their death toll rise even faster in the county. People over 85 with heart disease are more
 vulnerable to this virus. Comparing to male, female are more vulnerable. It is helpful for reducing the deaths
