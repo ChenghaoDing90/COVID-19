@@ -1,7 +1,13 @@
-# Covid19
-A class project to predict Covid-19 affection numbers in county level of US.
+# COVID-19
+A class project to predict COVID-19 affection numbers in county level of US.
 ## Project Description
 This project uses county level data about demographics and health-related information to predict one week deaths from April 23rd to April 30th. We consider some predictor variables, such as the polulation, age distribution, gender distribution, per capita share of medical resources and health conditions. 
+
+## Data Preprocessing
+At the county level, our data include COVID-19 cases/deaths from USA Facts and NYT, along with demographic information, health resource availability, COVID-19 health risk factors, and social mobility information. While at the hospital level, our data include the location of the hospital, the number of ICU beds, the total number of employees, and the hospital type.
+
+### Missing Value Treatment
+
 
 ## Clustering
 At first, to give a simple understanding, we perform the covid-19 growing pattern clustering by k-means method,
