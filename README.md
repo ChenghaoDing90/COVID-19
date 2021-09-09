@@ -35,7 +35,7 @@ We find cases and health resource are highly affected by the economic situation 
 We select our features that will contribute the most to PC1. Figure shows the contribution of each feature to PC1 for both data sets. We discard all the features whose contribution is under the red dashed line.
 
 <p align="center">
-<img src="./images/Captureggg.PNG" style="width:450px;height:300px;" />
+<img src="./images/Captureggg.PNG" style="width:1200px;height:300px;" />
 </p>
 
 ### SVM for Binary Classification
