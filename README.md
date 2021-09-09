@@ -41,7 +41,7 @@ We select our features that will contribute the most to PC1. Figure shows the co
 ### SVM for Binary Classification
 First one with death rate more than 1/100000 and the other one with death rate less than 1/100000. We perform a non-linear classification using SVM with the radial kernel.
 <p align="center">
-<img src="./images/Captureeq.PNG" style="width:400px;height:200px;" />
+<img src="./images/Captureeq.PNG" style="width:400px;height:100px;" />
 </p>
 where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost. 
 
@@ -55,7 +55,7 @@ The best performance is found when gamma = 0.003125 and cost = 32 and the accura
 ## Regression:One Week Death Count Prediction
 The relationship between respond variable (amount of deaths in day t in each county) and predictor variables:
 <p align="center">
-<img src="./images/Captureeqq.PNG" style="width:1000px;height:100px;" />
+<img src="./images/Captureeqq.PNG" style="width:800px;height:100px;" />
 </p>
 The xk’s are the variables about demographics and health related information at county level introduced in
 Section “Data Processing".
