@@ -32,6 +32,12 @@ Death Growth rate Pattern: Hierarchical Clustering
 We find cases and health resource are highly affected by the economic situation of a county. Comparing to them, deaths and demographics do not show any obvious regional characteristics and scatter throughout the country. The classification performs well and can give identify most counties with high death rate.
 
 ## Classification
+We select our features that will contribute the most to PC1. Figure shows the contribution of each feature to PC1 for both data sets. We discard all the features whose contribution is under the red dashed line.
+
+<p align="center">
+<img src="./images/Captureggg.PNG" style="width:450px;height:300px;" />
+</p>
+
 ### SVM for Binary Classification
 First one with death rate more than 1/100000 and the other one with death rate less than 1/100000. We perform a non-linear classification using SVM with the radial kernel.
 <p align="center">
@@ -40,9 +46,7 @@ First one with death rate more than 1/100000 and the other one with death rate l
 where is a tuning parameter which accounts for the smoothness of the decision boundary and controls the variance of the model. Hence, there are two parameters in SVM function: γ and cost. A 10 fold cross-validation for a grid of gamma and cost is performed to tune the parameter so that we can get the best performance out of the model.
 The best performance is found when gamma = 0.003125 and cost = 32 and the accuracy is about 0.77.
 
-<p align="center">
-<img src="./images/Captureggg.PNG" style="width:450px;height:300px;" />
-</p>
+
 
 <p align="center">
 <img src="./images/Captureggggg.PNG" style="width:450px;height:300px;" />
