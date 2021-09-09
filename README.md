@@ -19,7 +19,7 @@ Correlation and scale are both set to be true while performing PCA analysis to a
 At first, to give a simple understanding, we perform the covid-19 growing pattern clustering by k-means method,
 demographics clustering by spectral method and health-related information clustering by hierarchical clustering method. 
 
-Death Growth rate Pattern: Hierarchical Clustering
+Case Growth rate Pattern: k-means and spectral method
 
 <p align="center">
 <img src="./images/Captureffff.PNG" style="width:300px;height:500px;" />
