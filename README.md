@@ -79,8 +79,15 @@ We want to use the simple linear regression(OLS) to build the model, but we pref
 
 ### Boosting model
 <p align="center">
+<img src="./images/feature_importance.PNG" style="width:450px;height:300px;" />
+</p>
+
+<p align="center">
 <img src="./images/gradient_boosting.PNG" style="width:600px;height:200px;" />
 </p>
+The best tunning paramter of learning rate is 0.2932461, and max_depth is 10.
+The mean sqaured error of prediction in training dataset will be 0.0354181. The most important factor that are affecting death toll is the proportion of senior people of age older than 85.
+The second most important factor that are affecting prediction of death toll is the death number one day before in that county. This is supported by the COVID-19 pandemic study of WHO that senior people are more vulnerable to COVID-19 disease.
 
 ### Random Forest
 <p align="center">
@@ -93,6 +100,10 @@ We use logistic regression and support vector machine to predict whether death p
 <img src="./images/Capturevgg.PNG" alt="Summary of VGG Model Building" style="width:300px;height:300px;" />
 </p>
 
-
+### Conclusion
+The table below presents the training MSE and RMSE for each method. We see that the Generalized Addictive Model has the smallest MSE among the four methods.
+<p align="center">
+<img src="./images/Captureff.PNG" style="width:300px;height:300px;" />
+</p>
 
 We conclude that the the population and population density makes their death toll rise even faster in the county. People over 85 with heart disease are more vulnerable to this virus. Comparing to male, female are more vulnerable. It is helpful for reducing the deaths to provide adequate medical resource, such as a hospital. However, because of the population base, age density and gender density are related to social situation in this area, we think the analysis of vulnerable poeple are affected.
