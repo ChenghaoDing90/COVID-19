@@ -17,8 +17,9 @@ Correlation and scale are both set to be true while performing PCA analysis to a
 
 ## Clustering
 At first, to give a simple understanding, we perform the covid-19 growing pattern clustering by k-means method,
-demographics clustering by spectral method and health-related information clustering by agglomerative
-hierarchical clustering method.
+demographics clustering by spectral method and health-related information clustering by hierarchical clustering method. 
+
+Death Growth rate Pattern: Hierarchical Clustering
 
 <p align="center">
 <img src="./images/Captureffff.PNG" style="width:300px;height:500px;" />
@@ -29,6 +30,20 @@ hierarchical clustering method.
 </p>
 
 We find cases and health resource are highly affected by the economic situation of a county. Comparing to them, deaths and demographics do not show any obvious regional characteristics and scatter throughout the country. The classification performs well and can give identify most counties with high death rate.
+
+## Classification
+### SVM 
+<p align="center">
+<img src="./images/Captureeq.PNG" style="width:450px;height:300px;" />
+</p>
+
+<p align="center">
+<img src="./images/Captureeq.PNG" style="width:450px;height:300px;" />
+</p>
+
+<p align="center">
+<img src="./images/Captureeq.PNG" style="width:450px;height:300px;" />
+</p>
 
 ## One Week Prediction
 We use logistic regression and support vector machine to predict whether death per 100,000 population in the county is larger than 1. Then, four regression methods, elastic penalized regression, random forest regression, GAM regression and XGBoost method, are used to to predict one week deaths, based on the previous days’ amount of deaths, the cases a week ago and the characteristics of demogrphics and health-related information.
